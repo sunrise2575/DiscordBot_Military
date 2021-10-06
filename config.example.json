@@ -1,0 +1,11 @@
+{
+    "discord": {
+        "userID": "",
+        "botToken": ""
+    },
+    "login": {
+        "id": "",
+        "pw": "",
+        "studentID": ""
+    }
+}

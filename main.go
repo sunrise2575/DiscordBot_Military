@@ -9,11 +9,15 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	"github.com/robfig/cron/v3"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -238,51 +242,11 @@ func getCookies(config gjson.Result, path string) []*http.Cookie {
 
 }
 
-func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+oldValue := 
 
-	/*
-		// create discord session
-		discord, e := discordgo.New("Bot " + readFileAsString("./config/token.txt"))
-		if e != nil {
-			log.Fatalln("error creating Discord session,", e)
-			return
-		}
-
-		// 세팅을 다 했으니 세션을 연다
-		if e := discord.Open(); e != nil {
-			log.Fatalln("error opening connection,", e)
-			return
-		}
-
-		// 메인 함수가 종료되면 실행될 것들
-		defer func() {
-			discord.Close()
-			log.Println("bye")
-		}()
-
-		if e := discord.UpdateStatusComplex(discordgo.UpdateStatusData{
-			Activities: []*discordgo.Activity{
-				{
-					Name: "육군 아미 타이거",
-					Type: discordgo.ActivityTypeGame,
-				},
-			},
-		}); e != nil {
-			log.Fatalln("error update status complex,", e)
-			return
-		}
-	*/
-
-	config := gjson.Parse(readFileAsString("./config.json"))
-
+func checkStatusCron(sess *discordgo.Session, channel *discordgo.Channel, cookies []*http.Cookie, studentID string) {
 	now := time.Now()
-
-	cookies := getCookies(config, "./cookie.json")
-	studentID := config.Get("login.studentID").String()
-	requestDateFormatted := now.Format("200601")
-
-	json := gjson.Parse(getDailyInfo(cookies, studentID, requestDateFormatted))
+	json := gjson.Parse(getDailyInfo(cookies, studentID, now.Format("200601")))
 
 	for _, v := range json.Get("user").Array() {
 		target, e := time.Parse("2006/01/02", v.Get("WK_APPE_DT").String())
@@ -293,29 +257,72 @@ func main() {
 		// 년 월 일  모두 같으면
 		if target.Year() == now.Year() && target.Month() == now.Month() && target.Day() == now.Day() {
 			if v.Get("FROM_HM").Exists() {
-				log.Printf("오늘 당신은 %v시에 출근했습니다.\n", v.Get("FROM_HM"))
+				sess.ChannelMessageSend(channel.ID, fmt.Sprintf("오늘 당신은 %v시에 출근했습니다.", v.Get("FROM_HM")))
 			}
 			if v.Get("TO_HM").Exists() {
-				log.Printf("오늘 당신은 %v시에 퇴근했습니다.\n", v.Get("TO_HM"))
+				sess.ChannelMessageSend(channel.ID, fmt.Sprintf("오늘 당신은 %v시에 퇴근했습니다.", v.Get("TO_HM")))
 			}
 			break
 		}
 	}
+}
 
-	/*
-			channel, e := discord.UserChannelCreate(readFileAsString("./config/discord_user_id.txt"))
-			if e != nil {
-				log.Println("unable to create user channel", e)
-			}
-			discord.ChannelMessageSend(channel.ID, "")
+func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-		// Ctrl+C를 받아서 프로그램 자체를 종료하는 부분. os 신호를 받는다
-		log.Println("bot is now running. Press Ctrl+C to exit.")
-		{
-			sc := make(chan os.Signal, 1)
-			signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-			<-sc
-		}
-		log.Println("received Ctrl+C, please wait.")
-	*/
+	config := gjson.Parse(readFileAsString("./config.json"))
+
+	// create discord session
+	discord, e := discordgo.New("Bot " + config.Get("discord.botToken").String())
+	if e != nil {
+		log.Fatalln("error creating Discord session,", e)
+		return
+	}
+
+	channel, e := discord.UserChannelCreate(config.Get("discord.userID").String())
+	if e != nil {
+		log.Println("unable to create user channel", e)
+	}
+	cookies := getCookies(config, "./cookie.json")
+	studentID := config.Get("login.studentID").String()
+
+	c := cron.New(cron.WithSeconds())
+	c.Start()
+	c.AddFunc("*/5 * * * * *", func() {
+		checkStatusCron(discord, channel, cookies, studentID)
+	})
+
+	// 메인 함수가 종료되면 실행될 것들
+	defer func() {
+		c.Stop()
+		discord.Close()
+		log.Println("bye")
+	}()
+
+	// 세팅을 다 했으니 세션을 연다
+	if e := discord.Open(); e != nil {
+		log.Fatalln("error opening connection,", e)
+		return
+	}
+
+	if e := discord.UpdateStatusComplex(discordgo.UpdateStatusData{
+		Activities: []*discordgo.Activity{
+			{
+				Name: "육군 아미 타이거",
+				Type: discordgo.ActivityTypeGame,
+			},
+		},
+	}); e != nil {
+		log.Fatalln("error update status complex,", e)
+		return
+	}
+
+	// Ctrl+C를 받아서 프로그램 자체를 종료하는 부분. os 신호를 받는다
+	log.Println("bot is now running. Press Ctrl+C to exit.")
+	{
+		sc := make(chan os.Signal, 1)
+		signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+		<-sc
+	}
+	log.Println("received Ctrl+C, please wait.")
 }
