@@ -3,16 +3,19 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func readFileAsString(path string) string {
@@ -182,6 +185,59 @@ func getDailyInfo(cookies []*http.Cookie, studentID, yearAndMonth string) string
 	return string(body)
 }
 
+func saveCookies(cookies []*http.Cookie, path string) {
+	json := `{ "cookies": [] }`
+
+	for _, v := range cookies {
+		json, _ = sjson.SetRaw(json, "cookies.-1", fmt.Sprintf(`{"Name":"%v", "Value":"%v"}`, v.Name, v.Value))
+	}
+
+	if e := ioutil.WriteFile(path, []byte(json), 0644); e != nil {
+		log.Println(e)
+	}
+}
+
+func loadCookies(path string) []*http.Cookie {
+	cookies := []*http.Cookie{}
+
+	for _, v := range gjson.Parse(readFileAsString(path)).Get("cookies").Array() {
+		cookies = append(cookies, &http.Cookie{
+			Name:  v.Get("Name").String(),
+			Value: v.Get("Value").String(),
+		})
+	}
+
+	return cookies
+}
+
+func getCookies(config gjson.Result, path string) []*http.Cookie {
+	stat, e := os.Stat(path)
+
+	if os.IsNotExist(e) {
+		log.Println(path + " not exist")
+
+		// cookie file is not exist
+		// get cookie from online
+		cookies := login(
+			config.Get("login.id").String(),
+			config.Get("login.pw").String())
+		saveCookies(cookies, path)
+		return cookies
+	}
+
+	if stat.IsDir() {
+		// it's folder
+		log.Fatalln(path + " is folder")
+		return nil
+	}
+
+	// exist
+	log.Println(path + " exist")
+	cookies := loadCookies(path)
+	return cookies
+
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -218,16 +274,15 @@ func main() {
 		}
 	*/
 
-	// login
 	config := gjson.Parse(readFileAsString("./config.json"))
-	cookies := login(
-		config.Get("login.id").String(),
-		config.Get("login.pw").String())
-	// save cookie to db
+
 	now := time.Now()
-	json := gjson.Parse(getDailyInfo(cookies,
-		config.Get("login.studentID").String(),
-		now.Format("200601")))
+
+	cookies := getCookies(config, "./cookie.json")
+	studentID := config.Get("login.studentID").String()
+	requestDateFormatted := now.Format("200601")
+
+	json := gjson.Parse(getDailyInfo(cookies, studentID, requestDateFormatted))
 
 	for _, v := range json.Get("user").Array() {
 		target, e := time.Parse("2006/01/02", v.Get("WK_APPE_DT").String())
@@ -235,17 +290,16 @@ func main() {
 			log.Println(e)
 		}
 
-		if target.Year() == now.Year() &&
-			target.Month() == now.Month() &&
-			target.Day() == now.Day() {
+		// 년 월 일  모두 같으면
+		if target.Year() == now.Year() && target.Month() == now.Month() && target.Day() == now.Day() {
 			if v.Get("FROM_HM").Exists() {
 				log.Printf("오늘 당신은 %v시에 출근했습니다.\n", v.Get("FROM_HM"))
 			}
 			if v.Get("TO_HM").Exists() {
 				log.Printf("오늘 당신은 %v시에 퇴근했습니다.\n", v.Get("TO_HM"))
 			}
+			break
 		}
-
 	}
 
 	/*

@@ -17,5 +17,6 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/tidwall/match v1.1.0 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
+	github.com/tidwall/sjson v1.2.2 // indirect
 	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
 )
