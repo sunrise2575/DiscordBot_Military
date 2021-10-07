@@ -162,14 +162,15 @@ func loadCookies() []*http.Cookie {
 func getCookies() []*http.Cookie {
 	stat, e := os.Stat(pathCookieFile)
 
-	if os.IsNotExist(e) {
-		log.Println(pathCookieFile + " not exist")
+	if os.IsNotExist(e) || len(gjson.Parse(readFileAsString(pathCookieFile)).Get("cookies").Array()) == 0 {
+		log.Println(pathCookieFile + " not exist or empty")
 
-		// cookie file is not exist
+		// cookie file is not exist or empty
 		// get cookie from online
 		cookies := login(
 			config.Get("login.id").String(),
 			config.Get("login.pw").String())
+		myCookies = cookies
 		saveCookies()
 		return cookies
 	}
