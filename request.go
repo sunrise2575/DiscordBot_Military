@@ -12,7 +12,7 @@ import (
 )
 
 // the format of yearAndMonth is "200601"
-func getMonthInfo(yearAndMonth string) string {
+func getMonthInfo(cookies []*http.Cookie, yearAndMonth string) string {
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
 	_ = writer.WriteField("searchStdNo", studentID)
@@ -32,7 +32,7 @@ func getMonthInfo(yearAndMonth string) string {
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	for _, cookie := range myCookies {
+	for _, cookie := range cookies {
 		req.AddCookie(cookie)
 	}
 
@@ -53,27 +53,41 @@ func getMonthInfo(yearAndMonth string) string {
 }
 
 func getDayInfo(target time.Time) gjson.Result {
+	cookies := []*http.Cookie{}
+
 	for {
-		json := gjson.Parse(getMonthInfo(target.Format("200601")))
-
-		/*
-			// linear search
-			// JSON이 이미 정렬되어 있기에 쓸 필요 없음
-			for _, v := range jsonToday.Get("user").Array() {
-				candidate, e := time.Parse("2006/01/02", v.Get("WK_APPE_DT").String())
-				if candidate.Year() == target.Year() && candidate.Month() == target.Month() && candidate.Day() == target.Day() {
-					return v
-				}
-			}
-		*/
-
-		if json.Get("user").Exists() {
-			return json.Get("user").Array()[target.Day()-1]
+		//log.Println("cookies:", cookies)
+		// load cookie if not exist
+		if len(cookies) == 0 {
+			//log.Println("getCookies(false)")
+			cookies = getCookies(false)
+			//log.Println("cookies:", cookies)
 		}
 
-		// 로그인 만료되어서 제대로 메시지가 안오는것임
-		log.Println("쿠키 획득 시도")
-		myCookies = getCookies()
-		log.Println("쿠키 획득 성공")
+		if len(cookies) > 0 {
+			//log.Println("getMonthInfo")
+			json := gjson.Parse(getMonthInfo(cookies, target.Format("200601")))
+			//log.Println("cookies:", cookies)
+			//log.Println("json:", json.String())
+			if json.Get("user").Exists() {
+				//log.Println("yes")
+				// operating normally
+				return json.Get("user").Array()[target.Day()-1]
+			}
+		}
+
+		// somethings wrong
+		// renew cookie
+		log.Println("cookie may be expired, try to renew cookie...")
+		cookies = getCookies(true)
+		if cookies != nil {
+			log.Println("success to renew cookie")
+			continue
+		}
+
+		log.Println("failed, try more..")
+
+		// failed. try more...
+		time.Sleep(time.Second * 1)
 	}
 }

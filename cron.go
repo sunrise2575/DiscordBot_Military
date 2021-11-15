@@ -2,12 +2,53 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
+// new version
+func checkStatusCron(sess *discordgo.Session, channel *discordgo.Channel) {
+	now := time.Now()
+
+	today := getDayInfo(now)
+	if existAndIsFile(pathTodayFile) {
+		today_old := readFileAsString(pathTodayFile)
+		if today_old == today.String() {
+			// 오래된것과 비교해서 달라진게 없으면 나간다
+			return
+		}
+	}
+	// 뭔가 달라진걸 감지했다. 일단 파일을 기록한다.
+	writeFileFromString(pathTodayFile, today.String())
+
+	prefix := fmt.Sprintf("[%v]", now.Format("2006-01-02 15:04:05"))
+	msg := ""
+
+	tomorrow := getDayInfo(now.Add(time.Hour * 24))
+	if tomorrow.Get("WK_SCH").String() == "평상근무" {
+		// 내일이 평상근무라면
+		if today.Get("WK_SCH").String() == "평상근무" {
+			// 오늘도 평상근무라면
+			msg += "내일도 출근"
+		} else {
+			// 오늘은 평상근무가 아니라면
+			msg += "내일은 출근"
+		}
+	} else {
+		// 내일이 평상근무가 아니라면
+		msg += fmt.Sprintf("내일은 %v %v", tomorrow.Get("WK_SCH"), tomorrow.Get("REMK"))
+	}
+
+	msg += "```json\n"
+	msg += today.String()
+	msg += "```\n"
+
+	//log.Println(prefix + " " + msg)
+	sess.ChannelMessageSend(channel.ID, prefix+" "+msg)
+}
+
+/*
 func checkStatusCron(sess *discordgo.Session, channel *discordgo.Channel) {
 	now := time.Now()
 
@@ -63,3 +104,4 @@ func checkStatusCron(sess *discordgo.Session, channel *discordgo.Channel) {
 	log.Println(prefix + " " + msg + ", " + suffix)
 	sess.ChannelMessageSend(channel.ID, prefix+" "+msg+", "+suffix)
 }
+*/

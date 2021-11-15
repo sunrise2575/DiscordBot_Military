@@ -67,6 +67,7 @@ func login(myID, myPW string) (cookies []*http.Cookie) {
 
 			// about:blank 가 열릴 것이다
 			newTargetChannel := chromedp.WaitNewTarget(ctx, func(info *target.Info) bool {
+				log.Println("[Login][Pop-up] chromedp.WaitNewTarget callback")
 				return info.URL != ""
 			})
 
@@ -94,7 +95,7 @@ func login(myID, myPW string) (cookies []*http.Cookie) {
 
 			return nil
 		}),
-		chromedp.Sleep(time.Second*2),
+		chromedp.Sleep(time.Second*3),
 		chromedp.Location(&loginPageURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			log.Println("[Login Complete] New page URL: " + loginPageURL)
@@ -134,10 +135,10 @@ func login(myID, myPW string) (cookies []*http.Cookie) {
 	return cookies
 }
 
-func saveCookies() {
+func saveCookies(cookies []*http.Cookie) {
 	json := `{ "cookies": [] }`
 
-	for _, v := range myCookies {
+	for _, v := range cookies {
 		json, _ = sjson.SetRaw(json, "cookies.-1", fmt.Sprintf(`{"Name":"%v", "Value":"%v"}`, v.Name, v.Value))
 	}
 
@@ -159,7 +160,7 @@ func loadCookies() []*http.Cookie {
 	return cookies
 }
 
-func getCookies() []*http.Cookie {
+func getCookies(doRenew bool) []*http.Cookie {
 	stat, e := os.Stat(pathCookieFile)
 
 	if os.IsNotExist(e) || len(gjson.Parse(readFileAsString(pathCookieFile)).Get("cookies").Array()) == 0 {
@@ -170,8 +171,7 @@ func getCookies() []*http.Cookie {
 		cookies := login(
 			config.Get("login.id").String(),
 			config.Get("login.pw").String())
-		myCookies = cookies
-		saveCookies()
+		saveCookies(cookies)
 		return cookies
 	}
 
@@ -181,9 +181,23 @@ func getCookies() []*http.Cookie {
 		return nil
 	}
 
+	// exist but get a renew request
+	if doRenew {
+		log.Println(pathCookieFile + " exist, remove old cookie")
+		if e := os.RemoveAll(pathCookieFile); e != nil {
+			log.Fatal(e)
+		}
+
+		cookies := login(
+			config.Get("login.id").String(),
+			config.Get("login.pw").String())
+		saveCookies(cookies)
+		log.Println(pathCookieFile + " saved")
+		return cookies
+	}
+
 	// exist
-	log.Println(pathCookieFile + " exist")
+	//log.Println(pathCookieFile + " exist, loading")
 	cookies := loadCookies()
 	return cookies
-
 }

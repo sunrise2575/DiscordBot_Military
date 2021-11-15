@@ -3,7 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"os"
-	"time"
 )
 
 func readFileAsString(path string) string {
@@ -33,6 +32,8 @@ func existAndIsFile(path string) bool {
 	return true
 }
 
+/*
 func truncateTime(input time.Time) time.Time {
 	return time.Date(input.Year(), input.Month(), input.Day(), 0, 0, 0, 0, input.Location())
 }
+*/

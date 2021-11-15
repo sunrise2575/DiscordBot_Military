@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,16 +12,15 @@ import (
 )
 
 var (
-	config         = gjson.Result{}
+	config         gjson.Result
 	pathCookieFile = "./cookie.json"
 	pathConfigFile = "./config.json"
 	pathTodayFile  = "./today.json"
-	myCookies      = []*http.Cookie{}
 	studentID      = ""
 )
 
 func init() {
-	config = gjson.Parse(readFileAsString("./config.json"))
+	config = gjson.Parse(readFileAsString(pathConfigFile))
 	studentID = config.Get("login.studentID").String()
 }
 
@@ -44,7 +42,7 @@ func main() {
 	// 크론잡 등록
 	c := cron.New(cron.WithSeconds())
 	c.Start()
-	c.AddFunc("*/5 * * * * *", func() {
+	c.AddFunc("*/15 * * * * *", func() {
 		checkStatusCron(discord, channel)
 	})
 
