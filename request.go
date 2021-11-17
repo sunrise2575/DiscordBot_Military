@@ -66,13 +66,17 @@ func getDayInfo(target time.Time) gjson.Result {
 
 		if len(cookies) > 0 {
 			//log.Println("getMonthInfo")
-			json := gjson.Parse(getMonthInfo(cookies, target.Format("200601")))
-			//log.Println("cookies:", cookies)
-			//log.Println("json:", json.String())
-			if json.Get("user").Exists() {
-				//log.Println("yes")
-				// operating normally
-				return json.Get("user").Array()[target.Day()-1]
+			for i := 0; i < 5; i++ {
+				json := gjson.Parse(getMonthInfo(cookies, target.Format("200601")))
+
+				//log.Println("cookies:", cookies)
+				//log.Println("json:", json.String())
+				if json.Get("user").Exists() {
+					//log.Println("yes")
+					// operating normally
+					return json.Get("user").Array()[target.Day()-1]
+				}
+				time.Sleep(time.Millisecond * 100)
 			}
 		}
 

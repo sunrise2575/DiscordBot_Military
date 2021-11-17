@@ -129,7 +129,7 @@ func login(myID, myPW string) (cookies []*http.Cookie) {
 			return nil
 		}),
 	); e != nil {
-		log.Fatal(e)
+		log.Println(e)
 	}
 
 	return cookies
