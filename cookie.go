@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -22,93 +21,130 @@ func login(myID, myPW string) (cookies []*http.Cookie) {
 	)
 	defer cancel()
 	// 로그인 화면 DOM path
-	formID := `//input[@id="username"][@class="form-control"]`
-	formPW := `//input[@id="passwordTest"][@class="form-control"]`
-	formSubmitButton := `//input[@id="btnLogin"][@class="btn btn-info login_btn"]`
+	queryFormID := `//input[@type="text"][@id="oneid"]`
+	queryFormPW := `//input[@type="password"][@id="onepassword"]`
+	queryLoginSubmitButton := `//button[@class="btn btn-primary rounded btn-block w-100 z-depth-0 action-login font-weight-bold waves-effect waves-light"]`
+	queryPositionSubmitButton := `//button[@id="btnLoginProc"]`
 
 	// 로그인 화면 URL
-	loginPageURL := ""
+	currentURL := ""
 	if e := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login] Try to login")
-			return nil
-		}),
 		chromedp.EmulateViewport(1920, 1080),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login] Set browser viewport to 1920x1080")
+			log.Println("[브라우저] 브라우저 뷰포트 1920x1080으로 맞춤")
 			return nil
 		}),
-		chromedp.Navigate("https://stud.dgist.ac.kr/login.jsp"),
-		chromedp.Location(&loginPageURL),
+		chromedp.Navigate("https://auth.dgist.ac.kr/login/?agentId=19"), // 19=stud.dgist.ac.kr, 22=my.dgist.ac.kr, ...
+		chromedp.Location(&currentURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login] Log-in page URL: " + loginPageURL)
+			log.Println("[로그인] 로그인 페이지 도착. URL: " + currentURL)
 			return nil
 		}),
-		chromedp.WaitVisible(formID),
-		chromedp.SendKeys(formID, myID),
+		chromedp.Navigate("https://auth.dgist.ac.kr/login/?agentId=19"),
+		chromedp.Location(&currentURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login] Input ID")
+			log.Println("[로그인] 로그인 페이지 재도착. URL: " + currentURL)
 			return nil
 		}),
-		chromedp.WaitVisible(formPW),
-		chromedp.SendKeys(formPW, myPW),
+		chromedp.WaitVisible(queryFormID),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login] Input password")
+			log.Println("[로그인] OneID form 보임")
 			return nil
 		}),
-		chromedp.WaitVisible(formSubmitButton),
-		chromedp.Click(formSubmitButton),
+		chromedp.SendKeys(queryFormID, myID),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login] Click submit button")
+			log.Println("[로그인] OneID 입력")
 			return nil
 		}),
+		chromedp.WaitVisible(queryFormPW),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login][Pop-up] Try to handle pop-up")
-
-			// about:blank 가 열릴 것이다
-			newTargetChannel := chromedp.WaitNewTarget(ctx, func(info *target.Info) bool {
-				log.Println("[Login][Pop-up] chromedp.WaitNewTarget callback")
-				return info.URL != ""
-			})
-
-			blankCtx, cancel := chromedp.NewContext(ctx, chromedp.WithTargetID(<-newTargetChannel))
-			defer cancel()
-
-			// 신분 및 보직 선택
-			URL := ""
-			userSelectSubmitButon := `//button[@id="btnSelect"][@class="btn_select"]`
-			if e := chromedp.Run(blankCtx,
-				chromedp.Location(&URL),
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					log.Println("[Login][Pop-up] Pop-up window URL: " + URL)
-					return nil
-				}),
-				chromedp.WaitVisible(userSelectSubmitButon),
-				chromedp.Click(userSelectSubmitButon),
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					log.Println("[Login][Pop-up] Click submit button")
-					return nil
-				}),
-			); e != nil {
-				return e
+			log.Println("[로그인] 비밀번호 form 보임")
+			return nil
+		}),
+		chromedp.SendKeys(queryFormPW, myPW),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("[로그인] 비밀번호 입력")
+			return nil
+		}),
+		chromedp.WaitVisible(queryLoginSubmitButton),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("[로그인] Login 버튼 보임")
+			return nil
+		}),
+		chromedp.Click(queryLoginSubmitButton),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("[로그인] Login 버튼 클릭")
+			return nil
+		}),
+		chromedp.Sleep(time.Second*2),
+		chromedp.Location(&currentURL),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("[신분선택] 신분선택 페이지 도착. URL: " + currentURL)
+			targetURL := "https://stud.dgist.ac.kr/sso/agentProc.jsp"
+			if targetURL != currentURL {
+				return fmt.Errorf("신분선택 URL 이상: %v != %v", targetURL, currentURL)
 			}
-
 			return nil
 		}),
-		chromedp.Sleep(time.Second*3),
-		chromedp.Location(&loginPageURL),
+		chromedp.WaitVisible(queryPositionSubmitButton),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Login Complete] New page URL: " + loginPageURL)
+			log.Println("[신분선택] 로그인 버튼 보임")
+			return nil
+		}),
+		chromedp.Click(queryPositionSubmitButton),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("[신분선택] 로그인 버튼 클릭")
+			return nil
+		}),
+		/*
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				log.Println("[로그인][Pop-up] Try to handle pop-up")
+
+				// about:blank 가 열릴 것이다
+				newTargetChannel := chromedp.WaitNewTarget(ctx, func(info *target.Info) bool {
+					log.Println("[로그인][Pop-up] chromedp.WaitNewTarget callback")
+					return info.URL != ""
+				})
+
+				blankCtx, cancel := chromedp.NewContext(ctx, chromedp.WithTargetID(<-newTargetChannel))
+				defer cancel()
+
+				// 신분 및 보직 선택
+				URL := ""
+				userSelectSubmitButon := `//button[@id="btnSelect"][@class="btn_select"]`
+				if e := chromedp.Run(blankCtx,
+					chromedp.Location(&URL),
+					chromedp.ActionFunc(func(ctx context.Context) error {
+						log.Println("[로그인][Pop-up] Pop-up window URL: " + URL)
+						return nil
+					}),
+					chromedp.WaitVisible(userSelectSubmitButon),
+					chromedp.Click(userSelectSubmitButon),
+					chromedp.ActionFunc(func(ctx context.Context) error {
+						log.Println("[로그인][Pop-up] Click submit button")
+						return nil
+					}),
+				); e != nil {
+					return e
+				}
+
+				return nil
+			}),
+		*/
+		chromedp.Sleep(time.Second*3),
+		chromedp.Location(&currentURL),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("[학생정보광장] 로그인 성공. 학생정보광장 URL: " + currentURL)
 			targetURL := "https://stud.dgist.ac.kr/sch/student/main.do"
-			if targetURL != loginPageURL {
-				log.Println("[Login Failed?] Wrong target!")
+			if targetURL != currentURL {
+				return fmt.Errorf("학생정보광장 URL 이상: %v != %v", targetURL, currentURL)
 			}
 			return nil
 		}),
 		chromedp.Navigate("https://stud.dgist.ac.kr/usd/usdqSptRechMngtStud/index.do"),
-		chromedp.Location(&loginPageURL),
+		chromedp.Location(&currentURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("[Cookie] New page URL: " + loginPageURL)
+			log.Println("[학생정보광장] 전문연구요원>복무상황조회>복무정보 URL: " + currentURL)
 
 			_cookiesTemp, err := network.GetAllCookies().Do(ctx)
 			if err != nil {
@@ -124,7 +160,7 @@ func login(myID, myPW string) (cookies []*http.Cookie) {
 				}
 			}
 
-			log.Println("[Cookie] Complete getting the cookie!")
+			log.Println("[학생정보광장] 쿠키 획득 성공")
 
 			return nil
 		}),
